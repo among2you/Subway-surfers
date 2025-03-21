@@ -1,18 +1,41 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-canvas.width = 800;
-canvas.height = 400;
+// Responsive canvas
+function resizeCanvas() {
+  canvas.width = window.innerWidth * 0.9; // 90% of the screen width
+  canvas.height = window.innerHeight * 0.7; // 70% of the screen height
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// Load assets
+const playerImage = new Image();
+playerImage.src = './assets/player.png'; // Path to player image
+playerImage.alt = "Player character"; // Alt text for accessibility
+
+// Load sounds
+const coinSound = new Audio('./assets/coin.mp3'); // Use .mp3 format for compatibility
+const jumpSound = new Audio('./assets/jump.mp3');
+const hitSound = new Audio('./assets/hit.mp3');
+
+// Error handling for assets
+playerImage.onerror = () => console.error('Failed to load player image');
+coinSound.onerror = () => console.error('Failed to load coin sound');
+jumpSound.onerror = () => console.error('Failed to load jump sound');
+hitSound.onerror = () => console.error('Failed to load hit sound');
 
 // Game variables
 let gameSpeed = 5;
 let score = 0;
+let gameOver = false;
+let obstacleCooldown = 0; // Cooldown timer for obstacles
 
 // Player class
 class Player {
   constructor() {
     this.x = 50;
-    this.y = canvas.height - 100;
+    this.y = canvas.height - 50; // Ensure player starts exactly on the ground
     this.width = 50;
     this.height = 50;
     this.color = 'blue';
@@ -43,6 +66,7 @@ class Player {
     if (this.grounded) {
       this.dy = this.jumpStrength;
       this.grounded = false;
+      playSound(jumpSound);
     }
   }
 
@@ -122,6 +146,13 @@ function isCollidingWithCircle(rect, circle) {
   return dx * dx + dy * dy <= circle.radius * circle.radius;
 }
 
+// Play sound safely
+function playSound(sound) {
+  if (sound.readyState >= 2) {
+    sound.play();
+  }
+}
+
 // Game objects
 const player = new Player();
 const obstacles = [];
@@ -129,19 +160,33 @@ const coins = [];
 
 // Spawn obstacles and coins
 function spawnObjects() {
-  if (Math.random() < 0.02) {
-    const height = Math.random() * 50 + 20;
+  // Spawn obstacles with a cooldown
+  if (obstacleCooldown <= 0 && Math.random() < 0.02) {
+    const height = Math.random() * 20 + 20; // Reduced height range (10 to 40)
     obstacles.push(new Obstacle(canvas.width, canvas.height - height, 20, height, 'red'));
+    obstacleCooldown = 60; // Increased cooldown for better spacing
   }
 
+  // Decrease cooldown timer
+  if (obstacleCooldown > 0) {
+    obstacleCooldown--;
+  }
+
+  // Spawn coins
   if (Math.random() < 0.01) {
     const radius = 10;
-    coins.push(new Coin(canvas.width, Math.random() * (canvas.height - radius * 2) + radius, radius));
+    const yPosition = Math.random() * (canvas.height - 100 - radius) + (canvas.height - 100); // Ensure coins spawn within jumpable range
+    coins.push(new Coin(canvas.width, yPosition, radius));
   }
 }
 
 // Game loop
 function gameLoop() {
+  if (gameOver) {
+    displayGameOver();
+    return;
+  }
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // Update player
@@ -155,8 +200,8 @@ function gameLoop() {
 
     // Check collision with player
     if (isColliding(player, obstacle)) {
-      alert(`Game Over! Your score: ${score}`);
-      document.location.reload();
+      playSound(hitSound);
+      gameOver = true;
     }
 
     // Remove off-screen obstacles
@@ -174,10 +219,11 @@ function gameLoop() {
     if (isCollidingWithCircle(player, coin)) {
       coin.collected = true;
       score += 10;
+      playSound(coinSound);
     }
 
     // Remove off-screen coins
-    if (coin.x + coin.radius < 0) {
+    if (coin.x + coin.radius < 0 || coin.collected) {
       coins.splice(index, 1);
     }
   });
@@ -186,17 +232,69 @@ function gameLoop() {
   spawnObjects();
 
   // Display score
-  ctx.fillStyle = 'black';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(5, 5, 120, 30); // Background for the score
+  ctx.fillStyle = 'white';
   ctx.font = '20px Arial';
-  ctx.fillText(`Score: ${score}`, 10, 30);
+  ctx.fillText(`Score: ${score}`, 10, 25);
+
+  // Increase game speed as score increases
+  if (score % 50 === 0 && score > 0) {
+    gameSpeed += 0.1;
+  }
 
   requestAnimationFrame(gameLoop);
 }
 
-// Event listeners
+// Display game over message
+function displayGameOver() {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = 'white';
+  ctx.font = '30px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('Game Over!', canvas.width / 2, canvas.height / 2 - 20);
+  ctx.fillText(`Score: ${score}`, canvas.width / 2, canvas.height / 2 + 20);
+  ctx.fillText('Press R to Restart', canvas.width / 2, canvas.height / 2 + 60);
+}
+
+// Restart the game
+function restartGame() {
+  score = 0;
+  gameOver = false;
+  obstacles.length = 0;
+  coins.length = 0;
+  player.y = canvas.height - player.height; // Reset player position
+  player.dy = 0; // Reset player velocity
+  gameSpeed = 5; // Reset game speed
+  ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+  gameLoop();
+}
+
+// Event listeners for mobile and desktop
+canvas.addEventListener('click', () => {
+  if (gameOver) {
+    restartGame();
+  } else {
+    player.jump();
+  }
+});
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault(); // Prevent default touch behavior (e.g., scrolling)
+  if (gameOver) {
+    restartGame();
+  } else {
+    player.jump();
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
     player.jump();
+  } else if (e.code === 'KeyR' && gameOver) {
+    restartGame();
   }
 });
 
