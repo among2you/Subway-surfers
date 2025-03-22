@@ -3,11 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Play this fun and addictive endless runner game! Jump over obstacles, collect coins, and achieve the highest score.">
+  <meta name="keywords" content="endless runner, HTML5 game, canvas game, mobile-friendly game, fun game">
+  <meta name="author" content="Your Name">
   <title>Endless Runner Game</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: linear-gradient(to bottom, #87CEEB, #4682B4); /* Sky gradient */
+      overflow: hidden;
+    }
+
+    canvas {
+      border: 2px solid black;
+      background: white;
+    }
+  </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
+  <canvas id="gameCanvas" aria-label="Endless Runner Game"></canvas>
   <script src="script.js"></script>
 </body>
 </html>
