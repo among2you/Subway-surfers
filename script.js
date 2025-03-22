@@ -6,6 +6,11 @@ function resizeCanvas() {
   canvas.width = window.innerWidth * 0.9; // 90% of the screen width
   canvas.height = window.innerHeight * 0.7; // 70% of the screen height
 }
+
+// Set default canvas size
+canvas.width = 800; // Default width
+canvas.height = 400; // Default height
+
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
@@ -13,6 +18,17 @@ window.addEventListener('resize', resizeCanvas);
 const playerImage = new Image();
 playerImage.src = './assets/player.png'; // Path to player image
 playerImage.alt = "Player character"; // Alt text for accessibility
+
+const playerGif = new Image();
+playerGif.src = './assets/player_running.gif'; // Ensure this path is correct
+
+const obstacleImage = new Image();
+obstacleImage.src = './assets/obstacle.png'; // Path to obstacle PNG
+obstacleImage.alt = "Obstacle";
+
+const coinImage = new Image();
+coinImage.src = './assets/coin.png'; // Path to coin PNG
+coinImage.alt = "Coin";
 
 // Load sounds
 const coinSound = new Audio('./assets/coin.mp3'); // Use .mp3 format for compatibility
@@ -25,6 +41,29 @@ coinSound.onerror = () => console.error('Failed to load coin sound');
 jumpSound.onerror = () => console.error('Failed to load jump sound');
 hitSound.onerror = () => console.error('Failed to load hit sound');
 
+playerGif.onerror = () => console.error('Failed to load player GIF');
+obstacleImage.onerror = () => console.error('Failed to load obstacle image');
+coinImage.onerror = () => console.error('Failed to load coin image');
+
+// Load player animation frames with error handling
+const playerFrames = [
+  './assets/player_frame1.png',
+  './assets/player_frame2.png',
+  './assets/player_frame3.png',
+  './assets/player_frame4.png',
+].map((src, index) => {
+  const img = new Image();
+  img.src = src;
+
+  // Handle broken images
+  img.onerror = () => {
+    console.error(`Failed to load player frame: ${src}`);
+    img.src = './assets/placeholder.png'; // Use a placeholder image if the frame fails to load
+  };
+
+  return img;
+});
+
 // Game variables
 let gameSpeed = 5;
 let score = 0;
@@ -35,14 +74,18 @@ let obstacleCooldown = 0; // Cooldown timer for obstacles
 class Player {
   constructor() {
     this.x = 50;
-    this.y = canvas.height - 50; // Ensure player starts exactly on the ground
-    this.width = 50;
-    this.height = 50;
-    this.color = 'blue';
+    this.y = canvas.height - 120; // Adjusted to match new height
+    this.width = 60; // Increased width for better visibility
+    this.height = 80; // Increased height for better visibility
     this.dy = 0;
     this.gravity = 0.5;
-    this.jumpStrength = -10;
+    this.jumpStrength = -12; // Adjusted jump strength for new size
     this.grounded = true;
+
+    // Animation properties
+    this.frameIndex = 0; // Current frame index
+    this.frameTimer = 0; // Timer to control frame rate
+    this.frameInterval = 10; // Number of game loop iterations per frame
   }
 
   update() {
@@ -60,6 +103,13 @@ class Player {
       this.y = canvas.height - this.height;
       this.grounded = true;
     }
+
+    // Update animation frame
+    this.frameTimer++;
+    if (this.frameTimer >= this.frameInterval) {
+      this.frameIndex = (this.frameIndex + 1) % playerFrames.length; // Loop through frames
+      this.frameTimer = 0;
+    }
   }
 
   jump() {
@@ -71,19 +121,24 @@ class Player {
   }
 
   draw() {
-    ctx.fillStyle = this.color;
-    ctx.fillRect(this.x, this.y, this.width, this.height);
+    // Draw the current frame
+    ctx.drawImage(
+      playerFrames[this.frameIndex], // Current frame image
+      this.x,
+      this.y,
+      this.width,
+      this.height
+    );
   }
 }
 
 // Obstacle class
 class Obstacle {
-  constructor(x, y, width, height, color) {
+  constructor(x, y, width, height) {
     this.x = x;
     this.y = y;
     this.width = width;
     this.height = height;
-    this.color = color;
   }
 
   update() {
@@ -91,8 +146,7 @@ class Obstacle {
   }
 
   draw() {
-    ctx.fillStyle = this.color;
-    ctx.fillRect(this.x, this.y, this.width, this.height);
+    ctx.drawImage(obstacleImage, this.x, this.y, this.width, this.height);
   }
 }
 
@@ -111,10 +165,7 @@ class Coin {
 
   draw() {
     if (!this.collected) {
-      ctx.fillStyle = 'gold';
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.drawImage(coinImage, this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
     }
   }
 }
@@ -149,7 +200,12 @@ function isCollidingWithCircle(rect, circle) {
 // Play sound safely
 function playSound(sound) {
   if (sound.readyState >= 2) {
-    sound.play();
+    const playPromise = sound.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((error) => {
+        console.warn('Audio playback failed:', error);
+      });
+    }
   }
 }
 
@@ -158,13 +214,14 @@ const player = new Player();
 const obstacles = [];
 const coins = [];
 
-// Spawn obstacles and coins
+// Update spawnObjects function to adjust obstacle sizes
 function spawnObjects() {
   // Spawn obstacles with a cooldown
   if (obstacleCooldown <= 0 && Math.random() < 0.02) {
-    const height = Math.random() * 20 + 20; // Reduced height range (10 to 40)
-    obstacles.push(new Obstacle(canvas.width, canvas.height - height, 20, height, 'red'));
-    obstacleCooldown = 60; // Increased cooldown for better spacing
+    const height = Math.random() * 50 + 50; // Adjust height range (50 to 100)
+    const width = Math.random() * 30 + 40; // Adjust width range (40 to 70)
+    obstacles.push(new Obstacle(canvas.width, canvas.height - height, width, height));
+    obstacleCooldown = 60; // Cooldown for better spacing
   }
 
   // Decrease cooldown timer
@@ -174,7 +231,7 @@ function spawnObjects() {
 
   // Spawn coins
   if (Math.random() < 0.01) {
-    const radius = 10;
+    const radius = 15; // Adjust coin size
     const yPosition = Math.random() * (canvas.height - 100 - radius) + (canvas.height - 100); // Ensure coins spawn within jumpable range
     coins.push(new Coin(canvas.width, yPosition, radius));
   }
